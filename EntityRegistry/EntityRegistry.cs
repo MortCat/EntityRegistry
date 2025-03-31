@@ -25,7 +25,11 @@ namespace EntityRegistry
 
         protected readonly ConcurrentDictionary<string, T> _items = new();
 
-        public bool Add(T entity)
+        public virtual bool Add(T entity)
+        {
+            return AddInternal(entity);
+        }
+        protected virtual bool AddInternal(T entity)
         {
             if (_items.TryAdd(entity.Name, entity))
             {
@@ -38,7 +42,11 @@ namespace EntityRegistry
                 return false;
             }
         }
-        public bool Remove(string entityName)
+        public virtual bool Remove(string entityName)
+        {
+            return RemoveInternal(entityName);
+        }
+        protected virtual bool RemoveInternal(string entityName)
         {
             if (_items.TryRemove(entityName, out var entity))
             {
@@ -51,7 +59,11 @@ namespace EntityRegistry
                 return false;
             }
         }
-        public bool Update(T entity)
+        public virtual bool Update(T entity)
+        {
+            return UpdateInternal(entity);
+        }
+        protected virtual bool UpdateInternal(T entity)
         {
             if (_items.AddOrUpdate(entity.Name, entity, (_, __) => entity) != null)
             {
@@ -64,6 +76,8 @@ namespace EntityRegistry
                 return false;
             }
         }
+        public virtual bool Contains(string entityName) => _items.ContainsKey(entityName);
+
         public T? Get(string entityName)
         {
             if (_items.TryGetValue(entityName, out var value))
@@ -94,23 +108,23 @@ namespace EntityRegistry
         }
         public IEnumerable<T> GetAll(Func<T, bool> predicate)
         {
-            return _items.Values.Where(predicate);
+            return GetAll().Where(predicate);
         }
         public IReadOnlyCollection<T> GetAllReadOnly()
         {
-            return _items.Values.ToList().AsReadOnly();
+            return GetAll().ToList().AsReadOnly();
         }
         public IReadOnlyCollection<T> GetAllReadOnly(Func<T, bool> predicate)
         {
-            return _items.Values.Where(predicate).ToList().AsReadOnly();
+            return GetAll(predicate).ToList().AsReadOnly();
         }
         public IEnumerable<T> GetAllDeepClone()
         {
-            return _items.Values.Select(entity => DeepClone(entity));
+            return GetAll().Select(entity => DeepClone(entity));
         }
         public IEnumerable<T> GetAllDeepClone(Func<T, bool> predicate)
         {
-            return _items.Values.Where(predicate).Select(entity => DeepClone(entity));
+            return GetAll().Where(predicate).Select(entity => DeepClone(entity));
         }
         /// <summary>
         /// 取得已啟用的資料，依速度排序，跳過 20 筆後取 10 筆
@@ -118,8 +132,7 @@ namespace EntityRegistry
         /// </summary>
         public IEnumerable<T> GetPaged(Func<T, bool> predicate, Func<T, object> orderBy, int skip, int take)
         {
-            return _items.Values
-                         .Where(predicate)
+            return GetAll(predicate)
                          .OrderBy(orderBy)
                          .Skip(skip)
                          .Take(take);
@@ -130,12 +143,11 @@ namespace EntityRegistry
         /// </summary>
         public IEnumerable<T> GetPaged(Func<T, object> orderBy, int skip, int take)
         {
-            return _items.Values
-                         .OrderBy(orderBy)
-                         .Skip(skip)
-                         .Take(take);
+            return GetAll().OrderBy(orderBy)
+                           .Skip(skip)
+                           .Take(take);
         }
-        private T DeepClone(T entity)
+        protected virtual T DeepClone(T entity)
         {
             return (T)entity.Clone();
         }
