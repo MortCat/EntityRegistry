@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Reflection;
 
 namespace EntityRegistry
 {
@@ -27,18 +28,22 @@ namespace EntityRegistry
 
         public virtual bool Add(T entity)
         {
-            return AddInternal(entity);
+            return AddInternal(entity.Name, entity);
         }
-        protected virtual bool AddInternal(T entity)
+        public virtual bool Add(string entityName, T entity)
         {
-            if (_items.TryAdd(entity.Name, entity))
+            return AddInternal(entityName, entity);
+        }
+        protected virtual bool AddInternal(string entityName, T entity)
+        {
+            if (_items.TryAdd(entityName, entity))
             {
-                AddedSuccess?.Invoke(entity);
+                RaiseAddedSuccess(entity);
                 return true;
             }
             else
             {
-                AddedFailed?.Invoke(entity);
+                RaiseAddedFailed(entity);
                 return false;
             }
         }
@@ -50,31 +55,46 @@ namespace EntityRegistry
         {
             if (_items.TryRemove(entityName, out var entity))
             {
-                RemovedSuccess?.Invoke(entity);
+                RaiseRemovedSuccess(entity);
                 return true;
             }
             else
             {
-                RemovedFailed?.Invoke(default);
+                RaiseRemovedFailed(default);
                 return false;
             }
         }
         public virtual bool Update(T entity)
         {
-            return UpdateInternal(entity);
+            return UpdateProperties(entity);
         }
-        protected virtual bool UpdateInternal(T entity)
+
+        protected virtual bool UpdateProperties(T entity)
+        {
+            if (_items.TryGetValue(entity.Name, out var existing))
+            {
+                CopyPropertiesFrom(entity, existing);
+                RaiseUpdatedSuccess(existing);
+                return true;
+            }
+
+            RaiseUpdatedFailed(entity);
+            return false;
+        }
+        public virtual bool Replace(T entity)
+        {
+            return ReplaceInternal(entity);
+        }
+        protected virtual bool ReplaceInternal(T entity)
         {
             if (_items.AddOrUpdate(entity.Name, entity, (_, __) => entity) != null)
             {
-                UpdatedSuccess?.Invoke(entity);
+                RaiseUpdatedSuccess(entity);
                 return true;
             }
-            else
-            {
-                UpdatedFailed?.Invoke(entity);
-                return false;
-            }
+
+            RaiseUpdatedFailed(entity);
+            return false;
         }
         public virtual bool Contains(string entityName) => _items.ContainsKey(entityName);
 
@@ -86,7 +106,7 @@ namespace EntityRegistry
             }
             else
             {
-                GetFailed?.Invoke(default);
+                RaiseGetFailed(default);
                 return default;
             }
         }
@@ -98,7 +118,7 @@ namespace EntityRegistry
             }
             else
             {
-                GetFailed?.Invoke(default);
+                RaiseGetFailed(default);
                 return default;
             }
         }
@@ -151,6 +171,30 @@ namespace EntityRegistry
         {
             return (T)entity.Clone();
         }
+        private void CopyPropertiesFrom(T source, T target)
+        {
+            var props = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                                 .Where(p => p.CanRead && p.CanWrite);
+
+            foreach (var prop in props)
+            {
+                var value = prop.GetValue(source);
+                prop.SetValue(target, value);
+            }
+        }
+
+
+        protected void RaiseAddedSuccess(T entity) => AddedSuccess?.Invoke(entity);
+        protected void RaiseAddedFailed(T entity) => AddedFailed?.Invoke(entity);
+
+        protected void RaiseRemovedSuccess(T entity) => RemovedSuccess?.Invoke(entity);
+        protected void RaiseRemovedFailed(T entity) => RemovedFailed?.Invoke(entity);
+
+        protected void RaiseUpdatedSuccess(T entity) => UpdatedSuccess?.Invoke(entity);
+        protected void RaiseUpdatedFailed(T entity) => UpdatedFailed?.Invoke(entity);
+
+        protected void RaiseGetFailed(T entity) => GetFailed?.Invoke(entity);
+
 
         //public T? Get(Guid id) => _items.TryGetValue(id, out var value) ? value : default;
 
