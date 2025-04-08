@@ -26,6 +26,24 @@ namespace EntityRegistry
 
         protected readonly ConcurrentDictionary<string, T> _items = new();
 
+        public virtual bool AddOrUpdate(T entity)
+        {
+            var existing = _items.GetOrAdd(entity.Name, entity);
+
+            if (!ReferenceEquals(existing, entity))
+            {
+                CopyPropertiesFrom(entity, existing);
+                RaiseUpdatedSuccess(existing);
+            }
+            else
+            {
+                RaiseAddedSuccess(entity);
+            }
+
+            return true;
+        }
+
+
         public virtual bool Add(T entity)
         {
             return AddInternal(entity.Name, entity);
